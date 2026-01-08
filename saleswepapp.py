@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
-import requests
 import io
+from datetime import datetime
 
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.pagesizes import A4
@@ -9,16 +9,14 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
 # ================= CONFIG =================
-SHAREPOINT_EXCEL_URL = "https://1drv.ms/x/c/24b35948de29d550/IQBynZ3wAgBkR7ZbON1fOa2nAVs44tdoifZ72-rruajSNmo?e=mbXIyO"
-
-SALES_SHEET = "SALES"
-TARGET_SHEET = "TARGET"
+SALES_SHEET = "MAIN_COPY"
+TARGET_SHEET = "NEW_REPORT"
 
 USERS = {
+    "admin":   {"password": "admin@123",   "marketing": "ALL"},
     "ashok":   {"password": "ashok@123",   "marketing": "Ashok Marketing"},
     "suresh":  {"password": "suresh@123",  "marketing": "Suresh - Marketing"},
     "ho":      {"password": "ho@123",      "marketing": "H O - Marketing"},
-    "admin":   {"password": "admin@123",   "marketing": "ALL"},
 }
 
 MONTH_MAP = {
@@ -29,13 +27,6 @@ MONTH_MAP = {
 # =========================================
 
 st.set_page_config(page_title="Marketing Sales Dashboard", layout="wide")
-
-# ============ LOAD EXCEL FROM SHAREPOINT ============
-@st.cache_data(ttl=600)
-def load_excel_from_sharepoint(url):
-    response = requests.get(url)
-    response.raise_for_status()
-    return io.BytesIO(response.content)
 
 # ============ PDF ============
 def generate_pdf(marketing, df):
@@ -76,6 +67,7 @@ def generate_pdf(marketing, df):
 # ============ LOGIN ============
 def login():
     st.title("🔐 Marketing Login")
+
     user = st.text_input("Username")
     pwd = st.text_input("Password", type="password")
 
@@ -90,19 +82,44 @@ def login():
 # ============ DASHBOARD ============
 def dashboard():
     marketing = st.session_state["marketing"]
+    is_admin = (marketing == "ALL")
 
     st.sidebar.success(f"Logged in as: {marketing}")
+
     if st.sidebar.button("Logout"):
         st.session_state.clear()
         st.rerun()
 
-    # ---- LOAD EXCEL ----
-    excel_file = load_excel_from_sharepoint(SHAREPOINT_EXCEL_URL)
+    # ---------- ADMIN UPLOAD ----------
+    if is_admin:
+        uploaded_file = st.file_uploader(
+            "📤 Admin: Upload Marketing Excel File",
+            type=["xlsx"]
+        )
 
+        if uploaded_file:
+            st.session_state["excel_file"] = uploaded_file
+            st.session_state["last_updated"] = datetime.now()
+
+    # ---------- CHECK FILE ----------
+    if "excel_file" not in st.session_state:
+        st.warning("⚠️ Admin has not uploaded the Excel file yet")
+        st.stop()
+
+    excel_file = st.session_state["excel_file"]
+
+    # ---------- LAST UPDATED INFO ----------
+    if "last_updated" in st.session_state:
+        st.caption(
+            f"📅 Data last updated on: "
+            f"{st.session_state['last_updated'].strftime('%d-%m-%Y %H:%M:%S')}"
+        )
+
+    # ---------- READ EXCEL ----------
     sales_df = pd.read_excel(excel_file, sheet_name=SALES_SHEET)
     target_raw = pd.read_excel(excel_file, sheet_name=TARGET_SHEET)
 
-    # ---- TARGET WIDE → LONG ----
+    # ---------- TARGET (WIDE → LONG) ----------
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
@@ -118,28 +135,27 @@ def dashboard():
     )
 
     target_df["Target"] = pd.to_numeric(target_df["Target"], errors="coerce").fillna(0)
-
     target_df["Month_No"] = target_df["Month"].map(MONTH_MAP)
     target_df["Year"] = target_df["Month_No"].apply(lambda x: 2025 if x >= 4 else 2026)
     target_df["YearMonth"] = target_df["Year"] * 100 + target_df["Month_No"]
     target_df.rename(columns={"Marketing Person": "MARK"}, inplace=True)
 
-    # ---- CREDIT LOGIC ----
+    # ---------- CREDIT LOGIC ----------
     sales_df = sales_df[sales_df["HELPER"].isin(["NOFILL", "GREEN"])]
 
-    # ---- MARKETING FILTER ----
-    if marketing != "ALL":
+    # ---------- MARKETING FILTER ----------
+    if not is_admin:
         sales_df = sales_df[sales_df["MARK"] == marketing]
         target_df = target_df[target_df["MARK"] == marketing]
 
-    # ---- MONTHLY SALES ----
+    # ---------- MONTHLY SALES ----------
     monthly_sales = (
         sales_df
         .groupby(["YearMonth", "Month_Text"], as_index=False)["sales"]
         .sum()
     )
 
-    # ---- MERGE ----
+    # ---------- MERGE ----------
     monthly_report = pd.merge(
         monthly_sales,
         target_df[["YearMonth", "Target"]],
