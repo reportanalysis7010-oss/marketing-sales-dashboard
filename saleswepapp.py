@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
+import requests
 import io
-
-from google.oauth2.service_account import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaIoBaseDownload
 
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.pagesizes import A4
@@ -12,7 +9,7 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
 
 # ================= CONFIG =================
-FILE_ID = "https://docs.google.com/spreadsheets/d/1jeBb9ZZW_xrB7YLN3m8WsfVVmm6L0ZjR/edit?usp=sharing&ouid=103706315534147216648&rtpof=true&sd=true"
+SHAREPOINT_EXCEL_URL = "https://1drv.ms/x/c/24b35948de29d550/IQBynZ3wAgBkR7ZbON1fOa2nAVs44tdoifZ72-rruajSNmo?e=mbXIyO"
 
 SALES_SHEET = "SALES"
 TARGET_SHEET = "TARGET"
@@ -33,27 +30,14 @@ MONTH_MAP = {
 
 st.set_page_config(page_title="Marketing Sales Dashboard", layout="wide")
 
-# ============ GOOGLE DRIVE LOADER ============
-def load_excel_from_drive(file_id):
-    creds = Credentials.from_service_account_info(
-        st.secrets["gcp_service_account"],
-        scopes=["https://www.googleapis.com/auth/drive.readonly"]
-    )
+# ============ LOAD EXCEL FROM SHAREPOINT ============
+@st.cache_data(ttl=600)
+def load_excel_from_sharepoint(url):
+    response = requests.get(url)
+    response.raise_for_status()
+    return io.BytesIO(response.content)
 
-    service = build("drive", "v3", credentials=creds)
-    request = service.files().get_media(fileId=file_id)
-
-    file = io.BytesIO()
-    downloader = MediaIoBaseDownload(file, request)
-
-    done = False
-    while not done:
-        _, done = downloader.next_chunk()
-
-    file.seek(0)
-    return file
-
-# ============ PDF GENERATOR ============
+# ============ PDF ============
 def generate_pdf(marketing, df):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4)
@@ -112,13 +96,13 @@ def dashboard():
         st.session_state.clear()
         st.rerun()
 
-    # ---- LOAD EXCEL FROM GOOGLE DRIVE ----
-    excel_file = load_excel_from_drive(FILE_ID)
+    # ---- LOAD EXCEL ----
+    excel_file = load_excel_from_sharepoint(SHAREPOINT_EXCEL_URL)
 
     sales_df = pd.read_excel(excel_file, sheet_name=SALES_SHEET)
     target_raw = pd.read_excel(excel_file, sheet_name=TARGET_SHEET)
 
-    # ---- TARGET: WIDE → LONG ----
+    # ---- TARGET WIDE → LONG ----
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
