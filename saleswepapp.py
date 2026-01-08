@@ -10,7 +10,7 @@ from reportlab.lib import colors
 
 # ================= CONFIG =================
 SALES_SHEET = "MAIN_COPY"
-TARGET_SHEET = "NEW_REPORT"
+TARGET_SHEET = "MARKETING TARGET"
 
 USERS = {
     "admin":   {"password": "admin@123",   "marketing": "ALL"},
@@ -212,3 +212,4 @@ if "user" not in st.session_state:
     login()
 else:
     dashboard()
+
