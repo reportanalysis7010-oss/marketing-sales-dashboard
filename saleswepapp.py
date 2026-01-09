@@ -168,24 +168,24 @@ def dashboard():
     # ---------- MONTHLY SALES ----------
     monthly_sales = (
         sales_df
-        .groupby(["YearMonth", "Month_Text"], as_index=False)["sales"]
-        .sum()
+        .groupby(["MARK", "YearMonth", "Month_Text"], as_index=False)["sales"].sum()
+
+        
     )
 
     # ---------- MERGE ----------
     monthly_report = pd.merge(
-        monthly_sales,
-        target_df[["YearMonth", "Target"]],
-        on="YearMonth",
-        how="left"
-    )
+                              monthly_sales, target_df[["MARK", "YearMonth", "Target"]],
+    on=["MARK", "YearMonth"],
+    how="left"
+)
 
     monthly_report["Target"] = monthly_report["Target"].fillna(0)
     monthly_report["Achievement_%"] = (
         monthly_report["sales"] / monthly_report["Target"] * 100
     ).round(1)
 
-    monthly_report = monthly_report.sort_values("YearMonth")
+    monthly_report = monthly_report.sort_values(["MARK", "YearMonth"])
 
     # ================= UI =================
     st.title("📊 SALES PERFORMANCE DASHBOARD")
