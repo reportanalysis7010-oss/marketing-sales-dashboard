@@ -279,7 +279,8 @@ def dashboard():
     
     
     
-    
+    # 🔒 Marketing-filtered sales for new customer logic
+    sales_df_mkt = sales_df.copy()
     # ================= NEW CUSTOMER REPORT =================
     st.subheader("🆕 New Customer Report")
 
@@ -290,17 +291,20 @@ def dashboard():
     )
 
 # Clean customer names
-    sales_df["CUSTOMER NAME"] = (
-        sales_df["CUSTOMER NAME"].astype(str).str.strip().str.upper()
+    # ================= NEW CUSTOMER SALES (MARKETING FILTERED) =================
+
+# Clean customer names
+    sales_df_mkt["CUSTOMER NAME"] = (
+        sales_df_mkt["CUSTOMER NAME"].astype(str).str.strip().str.upper()
     )
 
     new_customer_df["CUSTOMER NAME"] = (
         new_customer_df["CUSTOMER NAME"].astype(str).str.strip().str.upper()
     )
 
-# Filter sales for new customers ONLY
-    new_customer_sales_df = sales_df[
-        sales_df["CUSTOMER NAME"].isin(new_customer_df["CUSTOMER NAME"])
+# Only NEW CUSTOMER sales for THIS marketing person
+    new_customer_sales_df = sales_df_mkt[
+        sales_df_mkt["CUSTOMER NAME"].isin(new_customer_df["CUSTOMER NAME"])
     ]
 
     new_customer_count = new_customer_df["CUSTOMER NAME"].nunique()
