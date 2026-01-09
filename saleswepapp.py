@@ -7,6 +7,18 @@ from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib import colors
+import os
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FONT_DIR = os.path.join(BASE_DIR, "fonts")
+
+pdfmetrics.registerFont(
+    TTFont("DejaVu", os.path.join(FONT_DIR, "DejaVuSans.ttf"))
+)
+pdfmetrics.registerFont(
+    TTFont("DejaVu-Bold", os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf"))
+)
 
 
 # ================= CONFIG =================
@@ -41,6 +53,12 @@ def generate_pdf(marketing_name, df):
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20)
     styles = getSampleStyleSheet()
+    styles["Title"].fontName = "DejaVu-Bold"
+    styles["Title"].fontSize = 18
+
+    styles["Normal"].fontName = "DejaVu"
+    styles["Normal"].fontSize = 10
+
     elements = []
 
     # ---------- HEADER ----------
@@ -74,10 +92,10 @@ def generate_pdf(marketing_name, df):
     )
 
     summary_table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#0B3C91")),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-        ("BACKGROUND", (0, 1), (1, 1), colors.lightgreen),
-        ("BACKGROUND", (2, 1), (2, 1), colors.salmon),
+        ("BACKGROUND", (0, 1), (1, 1), colors.HexColor("#2ECC71")),
+        ("BACKGROUND", (2, 1), (2, 1), colors.HexColor("#E74C3C") ),
         ("BACKGROUND", (3, 1), (3, 1), colors.khaki),
         ("GRID", (0, 0), (-1, -1), 1, colors.black),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
