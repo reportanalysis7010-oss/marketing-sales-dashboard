@@ -1,21 +1,13 @@
 import streamlit as st
 import pandas as pd
 import io
-import os
 from datetime import datetime
 
-from reportlab.pdfgen import canvas
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 from reportlab.lib.pagesizes import A4
-from reportlab.lib.colors import HexColor, black, white
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 
-# ================= FONT LOADING (GITHUB SAFE) =================
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-FONT_DIR = os.path.join(BASE_DIR, "fonts")
-
-pdfmetrics.registerFont(TTFont("DejaVu", os.path.join(FONT_DIR, "DejaVuSans.ttf")))
-pdfmetrics.registerFont(TTFont("DejaVu-Bold", os.path.join(FONT_DIR, "DejaVuSans-Bold.ttf")))
 
 # ================= CONFIG =================
 SALES_SHEET = "MAIN_COPY"
@@ -33,109 +25,92 @@ MONTH_MAP = {
     "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11,
     "DEC": 12, "JAN": 1, "FEB": 2, "MAR": 3
 }
+# =========================================
 
 st.set_page_config(page_title="Marketing Sales Dashboard", layout="wide")
 
-# ================= CACHE =================
+# ============ SHARED CACHE ============
 @st.cache_data(show_spinner="Loading Excel data...")
 def load_excel_cached(file_bytes):
     sales_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SALES_SHEET)
-    target_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=TARGET_SHEET)
-    return sales_df, target_df
+    target_raw = pd.read_excel(io.BytesIO(file_bytes), sheet_name=TARGET_SHEET)
+    return sales_df, target_raw
 
-# ================= PDF GENERATION =================
+# ============ PDF ============
 def generate_pdf(marketing_name, df):
     buffer = io.BytesIO()
-    c = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
-
-    BLUE   = HexColor("#0B3C91")
-    GREEN  = HexColor("#2ECC71")
-    RED    = HexColor("#E74C3C")
-    YELLOW = HexColor("#F4D03F")
-    GRAY   = HexColor("#F2F2F2")
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=20, leftMargin=20)
+    styles = getSampleStyleSheet()
+    elements = []
 
     # ---------- HEADER ----------
-    c.setFont("DejaVu-Bold", 20)
-    c.drawCentredString(width / 2, height - 40, "SALES PERFORMANCE REPORT (2025–2026)")
+    elements.append(
+        Paragraph(
+            f"<b>SALES PERFORMANCE REPORT (2025–2026)</b><br/><br/>"
+            f"<b>Marketing Person:</b> {marketing_name}",
+            styles["Title"]
+        )
+    )
 
-    c.setFont("DejaVu-Bold", 15)
-    c.drawCentredString(width / 2, height - 75, f"Marketing Person: {marketing_name.upper()}")
+    elements.append(Paragraph("<br/>", styles["Normal"]))
 
-    # ---------- KPI CALC ----------
+    # ---------- SUMMARY ----------
     total_target = df["Target"].sum()
     total_sales = df["sales"].sum()
     not_achieved = total_target - total_sales
-    achievement_pct = (total_sales / total_target * 100) if total_target else 0
+    achievement_pct = (total_sales / total_target * 100) if total_target > 0 else 0
 
-    # ---------- KPI BOXES ----------
-    box_y = height - 140
-    box_w = (width - 80) / 4
-    box_h = 45
-    x_start = 40
+    summary_table = Table(
+        [
+            ["TARGET", "ACHIEVED", "NOT ACHIEVED", "%"],
+            [
+                f"₹ {total_target:,.0f}",
+                f"₹ {total_sales:,.0f}",
+                f"₹ {not_achieved:,.0f}",
+                f"{achievement_pct:.1f} %"
+            ],
+        ],
+        colWidths=[110, 110, 110, 60]
+    )
 
-    kpis = [
-        ("TARGET", total_target, GREEN),
-        ("ACHIEVED", total_sales, GREEN),
-        ("NOT ACHIEVED", not_achieved, RED),
-        ("%", f"{achievement_pct:.1f} %", YELLOW),
-    ]
+    summary_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.darkblue),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("BACKGROUND", (0, 1), (1, 1), colors.lightgreen),
+        ("BACKGROUND", (2, 1), (2, 1), colors.salmon),
+        ("BACKGROUND", (3, 1), (3, 1), colors.khaki),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+    ]))
 
-    for i, (label, value, color) in enumerate(kpis):
-        x = x_start + i * box_w
+    elements.append(summary_table)
+    elements.append(Paragraph("<br/><br/>", styles["Normal"]))
 
-        c.setFillColor(BLUE)
-        c.rect(x, box_y + box_h, box_w, 20, fill=1)
-
-        c.setFillColor(color)
-        c.rect(x, box_y, box_w, box_h, fill=1)
-
-        c.setFillColor(white)
-        c.setFont("DejaVu-Bold", 11)
-        c.drawCentredString(x + box_w / 2, box_y + box_h + 5, label)
-
-        c.setFillColor(black)
-        c.setFont("DejaVu-Bold", 13)
-        c.drawCentredString(
-            x + box_w / 2,
-            box_y + 15,
-            f"₹ {value:,.0f}" if isinstance(value, (int, float)) else value
-        )
-
-    # ---------- TABLE ----------
-    table_y = box_y - 40
-    col_x = [40, 160, 310, 460]
-
-    c.setFillColor(GRAY)
-    c.rect(40, table_y, width - 80, 22, fill=1)
-
-    c.setFillColor(black)
-    c.setFont("DejaVu-Bold", 11)
-    c.drawString(col_x[0], table_y + 6, "Month")
-    c.drawString(col_x[1], table_y + 6, "Target")
-    c.drawString(col_x[2], table_y + 6, "Sales")
-    c.drawString(col_x[3], table_y + 6, "Achievement %")
-
-    c.setFont("DejaVu", 11)
-    y = table_y - 18
+    # ---------- DETAIL TABLE ----------
+    table_data = [["Month", "Target", "Sales", "Achievement %"]]
 
     for _, r in df.iterrows():
-        c.drawString(col_x[0], y, r["Month_Text"])
-        c.drawRightString(col_x[1] + 90, y, f"₹ {r['Target']:,.0f}")
-        c.drawRightString(col_x[2] + 90, y, f"₹ {r['sales']:,.0f}")
-        c.drawRightString(col_x[3] + 70, y, f"{r['Achievement_%']} %")
+        table_data.append([
+            r["Month_Text"],
+            f"₹ {r['Target']:,.0f}",
+            f"₹ {r['sales']:,.0f}",
+            f"{r['Achievement_%']} %"
+        ])
 
-        y -= 18
-        if y < 60:
-            c.showPage()
-            c.setFont("DejaVu", 11)
-            y = height - 60
+    detail_table = Table(table_data, repeatRows=1)
+    detail_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+        ("ALIGN", (1, 1), (-1, -1), "RIGHT"),
+    ]))
 
-    c.save()
+    elements.append(detail_table)
+
+    doc.build(elements)
     buffer.seek(0)
     return buffer
 
-# ================= LOGIN =================
+# ============ LOGIN ============
 def login():
     st.title("🔐 Marketing Login")
     user = st.text_input("Username")
@@ -149,29 +124,34 @@ def login():
         else:
             st.error("Invalid username or password")
 
-# ================= DASHBOARD =================
+# ============ DASHBOARD ============
 def dashboard():
     marketing = st.session_state["marketing"]
-    is_admin = marketing == "ALL"
+    is_admin = (marketing == "ALL")
 
     st.sidebar.success(f"Logged in as: {marketing}")
     if st.sidebar.button("Logout"):
         st.session_state.clear()
         st.rerun()
 
+    # ---------- ADMIN UPLOAD ----------
     if is_admin:
-        uploaded = st.file_uploader("📤 Upload Marketing Excel File", type="xlsx")
-        if uploaded:
-            st.session_state["file_bytes"] = uploaded.getvalue()
+        uploaded_file = st.file_uploader("📤 Admin: Upload Marketing Excel File", type=["xlsx"])
+        if uploaded_file:
+            st.session_state["file_bytes"] = uploaded_file.getvalue()
             st.session_state["last_updated"] = datetime.now()
 
     if "file_bytes" not in st.session_state:
-        st.warning("⚠️ Admin has not uploaded the Excel file")
+        st.warning("⚠️ Admin has not uploaded the Excel file yet")
         st.stop()
 
     sales_df, target_raw = load_excel_cached(st.session_state["file_bytes"])
 
+    if "last_updated" in st.session_state:
+        st.caption(f"📅 Data last updated on: {st.session_state['last_updated'].strftime('%d-%m-%Y %H:%M:%S')}")
+
     # ---------- TARGET ----------
+    target_raw.columns = target_raw.columns.str.strip()
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
@@ -182,50 +162,84 @@ def dashboard():
         target_df["Target"].astype(str)
         .str.replace("₹", "", regex=False)
         .str.replace(",", "", regex=False)
-        .astype(float)
+        .str.strip()
     )
+    target_df["Target"] = pd.to_numeric(target_df["Target"], errors="coerce").fillna(0)
 
     target_df["Month_No"] = target_df["Month"].map(MONTH_MAP)
     target_df["Year"] = target_df["Month_No"].apply(lambda x: 2025 if x >= 4 else 2026)
     target_df["YearMonth"] = target_df["Year"] * 100 + target_df["Month_No"]
 
-    # ---------- SALES ----------
-    sales_df["MARK"] = sales_df["MARK"].str.upper().str.strip()
-    target_df["MARK"] = target_df["MARK"].str.upper().str.strip()
+    # ---------- CLEAN & FILTER ----------
+    sales_df["MARK"] = sales_df["MARK"].astype(str).str.strip().str.upper()
+    target_df["MARK"] = target_df["MARK"].astype(str).str.strip().str.upper()
 
     sales_df = sales_df[sales_df["HELPER"].isin(["NOFILL", "GREEN"])]
+    valid_marketers = target_df["MARK"].unique()
+    sales_df = sales_df[sales_df["MARK"].isin(valid_marketers)]
 
-    if not is_admin:
-        sales_df = sales_df[sales_df["MARK"] == marketing.upper()]
-        target_df = target_df[target_df["MARK"] == marketing.upper()]
+    selected_marketing = "ALL"
+    if is_admin:
+        selected_marketing = st.selectbox("📌 Select Marketing Person", ["ALL"] + sorted(valid_marketers))
+        if selected_marketing != "ALL":
+            sales_df = sales_df[sales_df["MARK"] == selected_marketing]
+            target_df = target_df[target_df["MARK"] == selected_marketing]
+    else:
+        m = marketing.strip().upper()
+        sales_df = sales_df[sales_df["MARK"] == m]
+        target_df = target_df[target_df["MARK"] == m]
 
-    monthly_sales = sales_df.groupby(
-        ["MARK", "YearMonth", "Month_Text"], as_index=False
-    )["sales"].sum()
+    # ---------- CALCULATION ----------
+    monthly_sales = sales_df.groupby(["MARK", "YearMonth", "Month_Text"], as_index=False)["sales"].sum()
 
-    report = pd.merge(
+    monthly_report = pd.merge(
         monthly_sales,
         target_df[["MARK", "YearMonth", "Target"]],
         on=["MARK", "YearMonth"],
         how="left"
     )
 
-    report["Achievement_%"] = (report["sales"] / report["Target"] * 100).round(1)
+    monthly_report["Target"] = monthly_report["Target"].fillna(0)
+    monthly_report["Achievement_%"] = (monthly_report["sales"] / monthly_report["Target"] * 100).round(1)
+    monthly_report = monthly_report.sort_values(["MARK", "YearMonth"])
 
-    # ---------- UI ----------
+    # ================= UI =================
     st.title("📊 SALES PERFORMANCE DASHBOARD")
 
-    st.dataframe(report, use_container_width=True)
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Target", f"₹ {monthly_report['Target'].sum():,.0f}")
+    col2.metric("Total Sales", f"₹ {monthly_report['sales'].sum():,.0f}")
+    col3.metric("Achievement %",
+        f"{(monthly_report['sales'].sum() / monthly_report['Target'].sum() * 100):.1f} %"
+        if monthly_report["Target"].sum() > 0 else "0 %"
+    )
 
-    pdf = generate_pdf(marketing, report)
+    st.subheader("📊 Month-wise Target vs Sales")
+    if is_admin and selected_marketing == "ALL":
+        chart_df = monthly_report.groupby("Month_Text", as_index=False)[["Target", "sales"]].sum().set_index("Month_Text")
+    else:
+        chart_df = monthly_report.set_index("Month_Text")[["Target", "sales"]]
+    st.bar_chart(chart_df)
+
+    st.subheader("📋 Month-wise Sales Performance")
+    st.dataframe(
+        monthly_report[["MARK", "Month_Text", "Target", "sales", "Achievement_%"]]
+        .rename(columns={"MARK": "Marketing Person", "sales": "Sales Achieved"}),
+        use_container_width=True
+    )
+
+    # ---------- PDF ----------
+    pdf_name = selected_marketing if is_admin and selected_marketing != "ALL" else marketing
+    pdf = generate_pdf(pdf_name, monthly_report)
+
     st.download_button(
-        "📄 Download Sales Report PDF",
+        f"📄 Download {pdf_name} – Sales Report",
         pdf,
-        file_name=f"{marketing}_Sales_Report.pdf",
+        file_name=f"{pdf_name}_Sales_Report.pdf",
         mime="application/pdf"
     )
 
-# ================= MAIN =================
+# ============ MAIN ============
 if "user" not in st.session_state:
     login()
 else:
