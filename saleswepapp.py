@@ -227,7 +227,7 @@ def dashboard():
 # Load New Customer sheet (example sheet name)
     new_customer_df = pd.read_excel(
         io.BytesIO(st.session_state["file_bytes"]),
-        sheet_name="NEW_CUSTOMER"
+        sheet_name=NEW_CUSTOMER_SHEET
     )
 
 # Clean customer names
