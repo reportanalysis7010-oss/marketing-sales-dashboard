@@ -152,7 +152,7 @@ def dashboard():
         st.session_state["file_bytes"]
     )
 
-    # ===== EXISTING LOGIC (UNCHANGED) =====
+    # ================= EXISTING LOGIC (UNCHANGED) =================
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
@@ -193,28 +193,35 @@ def dashboard():
         monthly_report["sales"] / monthly_report["Target"] * 100
     ).round(1)
 
-    # ===== NEW BRAND WISE LOGIC (ADDED) =====
-    make_target_df["Make"] = make_target_df["Make"].str.upper().str.strip()
-    sales_df["MAKE"] = sales_df["MAKE"].str.upper().str.strip()
+    # ================= BRAND-WISE LOGIC (USING `make`) =================
+    sales_df["make"] = sales_df["make"].astype(str).str.strip().str.upper()
+    make_target_df["Make"] = make_target_df["Make"].astype(str).str.strip().str.upper()
 
-    start = pd.Timestamp("2025-04-01")
-    end = pd.Timestamp("2026-01-31")
-    month_count = 10
+    start_date = pd.Timestamp("2025-04-01")
+    end_date = pd.Timestamp("2026-01-31")
 
-    brand_sales = sales_df.groupby("MAKE", as_index=False)["sales"].sum()
+    month_count = (
+        (end_date.year - start_date.year) * 12 +
+        (end_date.month - start_date.month) + 1
+    )
+
+    brand_sales = sales_df.groupby("make", as_index=False)["sales"].sum()
     make_target_df["Total_Target"] = make_target_df["Target"] * month_count
 
     brand_report = pd.merge(
-        brand_sales, make_target_df,
-        left_on="MAKE", right_on="Make", how="left"
+        brand_sales,
+        make_target_df,
+        left_on="make",
+        right_on="Make",
+        how="left"
     )
 
     brand_report["Achievement_%"] = (
         brand_report["sales"] / brand_report["Total_Target"] * 100
     ).round(1)
 
-    # ===== NEW CUSTOMER LOGIC (ADDED) =====
-    new_customer_df["CUSTOMER NAME"] = new_customer_df["CUSTOMER NAME"].str.strip()
+    # ================= NEW CUSTOMER LOGIC =================
+    new_customer_df["CUSTOMER NAME"] = new_customer_df["CUSTOMER NAME"].astype(str).str.strip()
     new_customer_count = new_customer_df["CUSTOMER NAME"].nunique()
 
     new_customer_sales = sales_df[
@@ -228,12 +235,17 @@ def dashboard():
     st.dataframe(monthly_report, use_container_width=True)
 
     st.subheader("🆕 New Customer Summary")
-    st.metric("New Customers", new_customer_count)
-    st.metric("New Customer Sales", f"₹ {new_customer_sales:,.0f}")
+    st.metric("Number of New Customers", new_customer_count)
+    st.metric("New Customer Sales Value", f"₹ {new_customer_sales:,.0f}")
 
-    st.subheader("🏷️ Brand Wise Sales")
+    st.subheader("🏷️ Brand Wise Sales (Apr 2025 – Jan 2026)")
     st.dataframe(
-        brand_report[["MAKE", "sales", "Total_Target", "Achievement_%"]],
+        brand_report[["make", "sales", "Total_Target", "Achievement_%"]]
+        .rename(columns={
+            "make": "Brand",
+            "sales": "Sales",
+            "Total_Target": "Target"
+        }),
         use_container_width=True
     )
 
