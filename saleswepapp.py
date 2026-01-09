@@ -208,13 +208,15 @@ def dashboard():
 
     st.subheader("📋 Month-wise Sales Performance")
     st.dataframe(
-        monthly_report[["Month_Text", "Target", "sales", "Achievement_%"]]
-        .rename(columns={
-            "sales": "Sales Achieved",
-            "Achievement_%": "Achievement %"
-        }),
-        use_container_width=True
+    monthly_report[["MARK", "Month_Text", "Target", "sales", "Achievement_%"]]
+    .rename(columns={
+        "MARK": "Marketing Person",
+        "sales": "Sales Achieved",
+        "Achievement_%": "Achievement %"
+    }),
+    use_container_width=True
     )
+
 
     pdf = generate_pdf(marketing, monthly_report)
     st.download_button(
