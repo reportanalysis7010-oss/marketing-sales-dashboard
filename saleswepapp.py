@@ -28,6 +28,13 @@ MONTH_MAP = {
 
 st.set_page_config(page_title="Marketing Sales Dashboard", layout="wide")
 
+# ============ SHARED CACHE (CRITICAL FIX) ============
+@st.cache_data(show_spinner="Loading Excel data...")
+def load_excel_cached(file_bytes):
+    sales_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SALES_SHEET)
+    target_raw = pd.read_excel(io.BytesIO(file_bytes), sheet_name=TARGET_SHEET)
+    return sales_df, target_raw
+
 # ============ PDF ============
 def generate_pdf(marketing, df):
     buffer = io.BytesIO()
@@ -98,33 +105,34 @@ def dashboard():
         )
 
         if uploaded_file:
-            st.session_state["excel_file"] = uploaded_file
+            st.session_state["file_bytes"] = uploaded_file.getvalue()
             st.session_state["last_updated"] = datetime.now()
 
-    # ---------- CHECK FILE ----------
-    if "excel_file" not in st.session_state:
+    # ---------- CHECK DATA ----------
+    if "file_bytes" not in st.session_state:
         st.warning("⚠️ Admin has not uploaded the Excel file yet")
         st.stop()
 
-    excel_file = st.session_state["excel_file"]
+    # ---------- LOAD SHARED DATA ----------
+    sales_df, target_raw = load_excel_cached(st.session_state["file_bytes"])
 
-    # ---------- LAST UPDATED INFO ----------
+    # ---------- LAST UPDATED ----------
     if "last_updated" in st.session_state:
         st.caption(
             f"📅 Data last updated on: "
             f"{st.session_state['last_updated'].strftime('%d-%m-%Y %H:%M:%S')}"
         )
 
-    # ---------- READ EXCEL ----------
-    sales_df = pd.read_excel(excel_file, sheet_name=SALES_SHEET)
-    target_raw = pd.read_excel(excel_file, sheet_name=TARGET_SHEET)
-
     # ---------- TARGET (WIDE → LONG) ----------
+    target_raw.columns = target_raw.columns.str.strip()
+
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
         value_name="Target"
     )
+
+    target_df.rename(columns={"Marketing Person": "MARK"}, inplace=True)
 
     target_df["Target"] = (
         target_df["Target"]
@@ -138,15 +146,24 @@ def dashboard():
     target_df["Month_No"] = target_df["Month"].map(MONTH_MAP)
     target_df["Year"] = target_df["Month_No"].apply(lambda x: 2025 if x >= 4 else 2026)
     target_df["YearMonth"] = target_df["Year"] * 100 + target_df["Month_No"]
-    target_df.rename(columns={"Marketing Person": "MARK"}, inplace=True)
+
+    # ---------- CLEAN MARK NAMES ----------
+    sales_df["MARK"] = sales_df["MARK"].astype(str).str.strip().str.upper()
+    target_df["MARK"] = target_df["MARK"].astype(str).str.strip().str.upper()
 
     # ---------- CREDIT LOGIC ----------
     sales_df = sales_df[sales_df["HELPER"].isin(["NOFILL", "GREEN"])]
 
-    # ---------- MARKETING FILTER ----------
+    # ---------- KEEP ONLY VALID MARKETERS (KEY FIX) ----------
+    valid_marketers = target_df["MARK"].unique()
+    sales_df = sales_df[sales_df["MARK"].isin(valid_marketers)]
+
+    # ---------- LOGIN FILTER ----------
+    marketing_clean = marketing.strip().upper()
+
     if not is_admin:
-        sales_df = sales_df[sales_df["MARK"] == marketing]
-        target_df = target_df[target_df["MARK"] == marketing]
+        sales_df = sales_df[sales_df["MARK"] == marketing_clean]
+        target_df = target_df[target_df["MARK"] == marketing_clean]
 
     # ---------- MONTHLY SALES ----------
     monthly_sales = (
@@ -212,4 +229,3 @@ if "user" not in st.session_state:
     login()
 else:
     dashboard()
-
