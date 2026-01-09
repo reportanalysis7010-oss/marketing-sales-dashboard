@@ -221,6 +221,65 @@ def dashboard():
         monthly_report["sales"] / monthly_report["Target"] * 100
     ).round(1)
     monthly_report = monthly_report.sort_values(["MARK", "YearMonth"])
+    
+    # ================= SALES PERFORMANCE REPORT =================
+    st.subheader("📊 Sales Performance Report")
+
+# --- Metrics ---
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Total Target",
+        f"₹ {monthly_report['Target'].sum():,.0f}"
+    )
+
+    col2.metric(
+        "Total Sales",
+        f"₹ {monthly_report['sales'].sum():,.0f}"
+    )
+
+    achievement = (
+        monthly_report['sales'].sum() / monthly_report['Target'].sum() * 100
+        if monthly_report['Target'].sum() > 0 else 0
+    )
+
+    col3.metric(
+        "Achievement %",
+        f"{achievement:.1f} %"
+    )
+
+# --- Month-wise Target vs Sales Chart ---
+    st.subheader("📊 Month-wise Target vs Sales")
+
+    chart_df = (
+        monthly_report
+        .groupby("Month_Text", as_index=False)[["Target", "sales"]]
+        .sum()
+        .set_index("Month_Text")
+    )
+
+    st.bar_chart(chart_df)
+
+# --- Month-wise Sales Table ---
+    st.subheader("📋 Month-wise Sales Performance")
+
+    st.dataframe(
+        monthly_report[["MARK", "Month_Text", "Target", "sales", "Achievement_%"]]
+        .rename(columns={
+            "MARK": "Marketing Person",
+            "sales": "Sales Achieved",
+            "Achievement_%": "Achievement %"
+        }),
+        use_container_width=True
+    )
+
+    
+    
+    
+    
+    
+    
+    
     # ================= NEW CUSTOMER REPORT =================
     st.subheader("🆕 New Customer Report")
 
