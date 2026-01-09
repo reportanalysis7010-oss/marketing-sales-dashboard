@@ -307,8 +307,14 @@ def dashboard():
         sales_df_mkt["CUSTOMER NAME"].isin(new_customer_df["CUSTOMER NAME"])
     ]
 
-    new_customer_count = new_customer_df["CUSTOMER NAME"].nunique()
+    # ================= NEW CUSTOMER COUNT & SALES (MARKETING FILTERED) =================
+
+    # Customers who are NEW and belong to THIS marketing person
+    new_customer_names_mkt = new_customer_sales_df["CUSTOMER NAME"].unique()
+
+    new_customer_count = len(new_customer_names_mkt)
     new_customer_sales = new_customer_sales_df["sales"].sum()
+
  
     col_nc1, col_nc2 = st.columns(2)
     col_nc1.metric("New Customers", new_customer_count)
