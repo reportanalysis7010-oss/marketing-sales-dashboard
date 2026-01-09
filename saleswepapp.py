@@ -168,8 +168,9 @@ def dashboard():
     ]
 
     new_customer_count = new_customer_df["CUSTOMER NAME"].nunique()
-    new_customer_sales = new_customer_df["sales"].sum()
-
+    new_customer_names = new_customer_df["CUSTOMER NAME"].astype(str).str.upper().unique()
+    new_customer_sales = sales_df[
+    sales_df["CUSTOMER NAME"].astype(str).str.upper().isin(new_customer_names)]["sales"].sum()
     # ================= UI =================
     st.title("📊 SALES PERFORMANCE DASHBOARD")
 
