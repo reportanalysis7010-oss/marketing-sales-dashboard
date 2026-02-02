@@ -23,7 +23,6 @@ SALES_SHEET = "MAIN_COPY"
 TARGET_SHEET = "MARKETING TARGET"
 MAKE_TARGET_SHEET = "MAKE TARGET"
 NEW_CUSTOMER_SHEET = "Merge1"
-  # >>> ADDED (if exists)
 
 USERS = {
     "admin": {"password": "admin@123", "marketing": "ALL"},
@@ -46,7 +45,6 @@ def load_excel_cached(file_bytes):
     sales_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=SALES_SHEET)
     target_raw = pd.read_excel(io.BytesIO(file_bytes), sheet_name=TARGET_SHEET)
 
-    # >>> ADDED (SAFE LOAD)
     try:
         make_target_df = pd.read_excel(io.BytesIO(file_bytes), sheet_name=MAKE_TARGET_SHEET)
     except:
@@ -69,7 +67,6 @@ def generate_pdf(marketing_name, df):
     styles["Normal"].fontName = "DejaVu"
 
     elements = []
-
     elements.append(Paragraph(
         f"<b>SALES PERFORMANCE REPORT (2025–2026)</b><br/><br/>"
         f"<b>Marketing Person:</b> {marketing_name}",
@@ -166,6 +163,10 @@ def dashboard():
         st.session_state["file_bytes"]
     )
 
+    # ================= FIX SALES COLUMN =================
+    if "sales" not in sales_df.columns:
+        sales_df["sales"] = pd.to_numeric(sales_df["Value"], errors="coerce").fillna(0)
+
     # ================= MONTHLY TARGET =================
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
@@ -221,34 +222,20 @@ def dashboard():
         monthly_report["sales"] / monthly_report["Target"] * 100
     ).round(1)
     monthly_report = monthly_report.sort_values(["MARK", "YearMonth"])
-    
+
     # ================= SALES PERFORMANCE REPORT =================
     st.subheader("📊 Sales Performance Report")
 
-# --- Metrics ---
     col1, col2, col3 = st.columns(3)
-
-    col1.metric(
-        "Total Target",
-        f"₹ {monthly_report['Target'].sum():,.0f}"
-    )
-
-    col2.metric(
-        "Total Sales",
-        f"₹ {monthly_report['sales'].sum():,.0f}"
-    )
+    col1.metric("Total Target", f"₹ {monthly_report['Target'].sum():,.0f}")
+    col2.metric("Total Sales", f"₹ {monthly_report['sales'].sum():,.0f}")
 
     achievement = (
         monthly_report['sales'].sum() / monthly_report['Target'].sum() * 100
         if monthly_report['Target'].sum() > 0 else 0
     )
+    col3.metric("Achievement %", f"{achievement:.1f} %")
 
-    col3.metric(
-        "Achievement %",
-        f"{achievement:.1f} %"
-    )
-
-# --- Month-wise Target vs Sales Chart ---
     st.subheader("📊 Month-wise Target vs Sales")
 
     chart_df = (
@@ -257,70 +244,41 @@ def dashboard():
         .sum()
         .set_index("Month_Text")
     )
-
     st.bar_chart(chart_df)
 
-# --- Month-wise Sales Table ---
     st.subheader("📋 Month-wise Sales Performance")
-
     st.dataframe(
         monthly_report[["MARK", "Month_Text", "Target", "sales", "Achievement_%"]]
-        .rename(columns={
-            "MARK": "Marketing Person",
-            "sales": "Sales Achieved",
-            "Achievement_%": "Achievement %"
-        }),
+        .rename(columns={"MARK": "Marketing Person"}),
         use_container_width=True
     )
 
-    
-    
-    
-    
-    
-    
-    # 🔒 Marketing-filtered sales for new customer logic
-    sales_df_mkt = sales_df.copy()
     # ================= NEW CUSTOMER REPORT =================
     st.subheader("🆕 New Customer Report")
 
-# Load New Customer sheet (example sheet name)
+    sales_df_mkt = sales_df.copy()
+
     new_customer_df = pd.read_excel(
         io.BytesIO(st.session_state["file_bytes"]),
         sheet_name=NEW_CUSTOMER_SHEET
     )
 
-# Clean customer names
-    # ================= NEW CUSTOMER SALES (MARKETING FILTERED) =================
+    sales_df_mkt["CUSTOMER NAME"] = sales_df_mkt["CUSTOMER NAME"].astype(str).str.strip().str.upper()
+    new_customer_df["CUSTOMER NAME"] = new_customer_df["CUSTOMER NAME"].astype(str).str.strip().str.upper()
 
-# Clean customer names
-    sales_df_mkt["CUSTOMER NAME"] = (
-        sales_df_mkt["CUSTOMER NAME"].astype(str).str.strip().str.upper()
-    )
-
-    new_customer_df["CUSTOMER NAME"] = (
-        new_customer_df["CUSTOMER NAME"].astype(str).str.strip().str.upper()
-    )
-
-# Only NEW CUSTOMER sales for THIS marketing person
     new_customer_sales_df = sales_df_mkt[
         sales_df_mkt["CUSTOMER NAME"].isin(new_customer_df["CUSTOMER NAME"])
     ]
 
-    # ================= NEW CUSTOMER COUNT & SALES (MARKETING FILTERED) =================
-
-    # Customers who are NEW and belong to THIS marketing person
     new_customer_names_mkt = new_customer_sales_df["CUSTOMER NAME"].unique()
-
     new_customer_count = len(new_customer_names_mkt)
     new_customer_sales = new_customer_sales_df["sales"].sum()
 
- 
-    col_nc1, col_nc2 = st.columns(2)
-    col_nc1.metric("New Customers", new_customer_count)
-    col_nc2.metric("New Customer Sales", f"₹ {new_customer_sales:,.0f}")
+    colA, colB = st.columns(2)
+    colA.metric("New Customers", new_customer_count)
+    colB.metric("New Customer Sales", f"₹ {new_customer_sales:,.0f}")
 
-    # ================= BRAND WISE (ADDED) =================
+    # ================= BRAND WISE =================
     st.subheader("🏷️ Brand Wise Sales")
 
     make_target_df["Make"] = make_target_df["Make"].str.upper()
@@ -348,7 +306,7 @@ def dashboard():
     brand_df = pd.DataFrame(brand_rows)
     st.dataframe(brand_df, use_container_width=True)
 
-    # ================= PDF =================
+    # ================= PDF DOWNLOAD =================
     pdf_name = selected_marketing if selected_marketing != "ALL" else marketing
     pdf = generate_pdf(pdf_name, monthly_report)
 
