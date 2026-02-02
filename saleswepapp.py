@@ -256,6 +256,67 @@ def dashboard():
     total_target = monthly_report["Target"].sum()
     total_sale = monthly_report["Value"].sum()
     col3.metric("Achievement %", f"{(total_sale / total_target * 100):.1f} %" if total_target else "0 %")
+    
+    # ================= PROJECTION REPORT =================
+    st.subheader("📈 Sales Projection Report (To Achieve Full Target)")
+
+# 1. YEARLY TARGET
+    yearly_target = target_df["Target"].sum()
+
+# 2. COMPLETED MONTH COUNT (months where sales > 0)
+    completed_months = monthly_report[monthly_report["sales"] > 0]["Month_Text"].nunique()
+
+# 3. TARGET UNTIL COMPLETED MONTHS
+    target_till_now = (
+        target_df.sort_values("YearMonth")
+        .head(completed_months)["Target"]
+        .sum()
+    )
+
+# 4. ACTUAL SALES UNTIL COMPLETED MONTHS
+    actual_sales_till_now = (
+        monthly_report.sort_values("YearMonth")
+        .head(completed_months)["sales"]
+        .sum()
+    )
+
+# 5. SHORTFALL / SURPLUS
+    difference = target_till_now - actual_sales_till_now
+
+# 6. MONTHS REMAINING
+    total_months = 12
+    months_remaining = total_months - completed_months
+    months_remaining = max(months_remaining, 0)
+
+# 7. REQUIRED SALES TO ACHIEVE FULL TARGET
+    required_sales_total = max(yearly_target - actual_sales_till_now, 0)
+
+# 8. REQUIRED SALES PER MONTH
+    required_sales_per_month = (
+        required_sales_total / months_remaining if months_remaining > 0 else 0
+    )
+
+# DISPLAY
+    col_p1, col_p2, col_p3 = st.columns(3)
+
+    col_p1.metric("Yearly Target", f"₹ {yearly_target:,.0f}")
+    col_p2.metric("Completed Months", completed_months)
+    col_p3.metric("Months Remaining", months_remaining)
+
+    col_p4, col_p5, col_p6 = st.columns(3)
+
+    col_p4.metric("Target Till Now", f"₹ {target_till_now:,.0f}")
+    col_p5.metric("Actual Sales Till Now", f"₹ {actual_sales_till_now:,.0f}")
+
+    if difference >= 0:
+        col_p6.metric("Shortfall", f"₹ {difference:,.0f}")
+    else:
+        col_p6.metric("Surplus", f"₹ {abs(difference):,.0f}")
+
+    col_p7, col_p8 = st.columns(2)
+    col_p7.metric("Required Sales (Remaining Months)", f"₹ {required_sales_total:,.0f}")
+    col_p8.metric("Required Sales Per Month", f"₹ {required_sales_per_month:,.0f}")
+
 
 
     st.subheader("📊 Month-wise Target vs Sales")
