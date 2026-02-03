@@ -279,29 +279,36 @@ def dashboard():
     col2.metric("Total Sales (Completed Months)", f"₹ {completed_sales:,.0f}")
     col3.metric("Achievement %", f"{achievement:.1f} %")
 
-
 # ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-# Completed months count
-    completed_months = monthly_report[
-        monthly_report["YearMonth"] < current_ym
-    ]["YearMonth"].nunique()
+# Current YearMonth
+    today = datetime.today()
+    current_ym = today.year * 100 + today.month
 
-# Sales gap for completed target
-    remaining_target_to_achieve = max(completed_target - completed_sales, 0)
+# Completed and future logic
+    completed_target = monthly_report[monthly_report["YearMonth"] < current_ym]["Target"].sum()
+    completed_sales  = monthly_report[monthly_report["YearMonth"] < current_ym]["Value"].sum()
+
+    sales_gap = max(completed_target - completed_sales, 0)
+
+    future_target = monthly_report[monthly_report["YearMonth"] >= current_ym]["Target"].sum()
+
+# ⭐ FINAL REMAINING TARGET (GAP + FUTURE TARGET)
+    projected_remaining_target = sales_gap + future_target
 
 # Remaining months
+    completed_months = monthly_report[monthly_report["YearMonth"] < current_ym]["YearMonth"].nunique()
     remaining_months = 12 - completed_months
 
-# Monthly need to reach completed months target
     required_monthly_sales = (
-        remaining_target_to_achieve / remaining_months if remaining_months > 0 else 0
+        projected_remaining_target / remaining_months if remaining_months > 0 else 0
     )
 
+# Metrics
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
-    colp2.metric("Remaining Target (₹)", f"{remaining_target_to_achieve:,.0f}")
+    colp2.metric("Remaining Target (₹)", f"{projected_remaining_target:,.0f}")
     colp3.metric("Months Left", remaining_months)
     colp4.metric("Required Monthly Sales (₹)", f"{required_monthly_sales:,.0f}")
 
@@ -382,4 +389,5 @@ if "user" not in st.session_state:
     login()
 else:
     dashboard()
+
 
