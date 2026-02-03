@@ -33,6 +33,7 @@ USERS = {
     "ho": {"password": "ho@123", "marketing": "H O - Marketing"},
 }
 
+
 MONTH_MAP = {
     "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7,
     "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11,
@@ -100,9 +101,6 @@ def generate_pdf(marketing_name, df):
     summary.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.HexColor("#0B3C91")),
         ("TEXTCOLOR", (0,0), (-1,0), colors.white),
-        ("BACKGROUND", (0,1), (1,1), colors.HexColor("#2ECC71")),
-        ("BACKGROUND", (2,1), (2,1), colors.HexColor("#E74C3C")),
-        ("BACKGROUND", (3,1), (3,1), colors.khaki),
         ("GRID", (0,0), (-1,-1), 1, colors.black),
         ("ALIGN", (0,0), (-1,-1), "CENTER"),
     ]))
@@ -110,7 +108,7 @@ def generate_pdf(marketing_name, df):
     elements.append(summary)
     elements.append(Paragraph("<br/>", styles["Normal"]))
 
-    # Detail Table
+    # Detail Rows
     table_data = [["Month", "Target", "Sales", "Achievement %"]]
     for _, r in df.iterrows():
         table_data.append([
@@ -124,7 +122,6 @@ def generate_pdf(marketing_name, df):
     detail.setStyle(TableStyle([
         ("BACKGROUND", (0,0), (-1,0), colors.lightgrey),
         ("GRID", (0,0), (-1,-1), 1, colors.black),
-        ("ALIGN", (1,1), (-1,-1), "RIGHT"),
     ]))
 
     elements.append(detail)
@@ -164,25 +161,27 @@ def dashboard():
         f = st.file_uploader("📤 Upload Excel", type="xlsx")
         if f:
             st.session_state["file_bytes"] = f.getvalue()
-            st.session_state["last_updated"] = datetime.now()
 
     if "file_bytes" not in st.session_state:
-        st.warning("⚠️ Admin has not uploaded an Excel file")
+        st.warning("⚠️ Admin has not uploaded Excel")
         st.stop()
 
     sales_df, target_raw, make_target_df, new_customer_df = load_excel_cached(
         st.session_state["file_bytes"]
     )
-    # ================= FIX MONTH TEXT COLUMN =================
-    possible_month_cols = ["Month_Text", "MONTH_TEXT", "Month Text", "month_text", "monthtext"]
 
-    for col in possible_month_cols:
+
+    # ================= FIX Month_Text =================
+    month_cols = ["Month_Text", "MONTH_TEXT", "Month Text", "monthtext"]
+    found = False
+    for col in month_cols:
         if col in sales_df.columns:
             sales_df["Month_Text"] = sales_df[col].astype(str)
+            found = True
             break
 
-    if "Month_Text" not in sales_df.columns:
-        st.error("❌ Month_Text column missing in MAIN_COPY sheet. Please check your Excel.")
+    if not found:
+        st.error("❌ Month_Text column missing")
         st.stop()
 
 
@@ -190,15 +189,13 @@ def dashboard():
     sales_df["MARK"] = sales_df["MARK"].str.upper().str.strip()
     sales_df["make"] = sales_df["make"].astype(str).str.upper()
 
-    # Only sales rows (HELPER logic)
     sales_df = sales_df[sales_df["HELPER"].isin(["NOFILL", "GREEN"])]
 
-    # Use VALUE instead of sales field
+    # Convert VALUE to numeric
     sales_df["Value"] = pd.to_numeric(sales_df["Value"], errors="coerce").fillna(0)
 
 
-
-    # ================= TARGET =================
+    # ================= TARGET DF =================
     target_df = target_raw.melt(
         id_vars=["Marketing Person"],
         var_name="Month",
@@ -206,131 +203,100 @@ def dashboard():
     ).rename(columns={"Marketing Person": "MARK"})
 
     target_df["Target"] = (
-        target_df["Target"].astype(str)
-        .str.replace("₹", "")
-        .str.replace(",", "")
-        .str.strip()
+        target_df["Target"].astype(str).str.replace("₹","").str.replace(",","")
     ).astype(float)
 
     target_df["Month_No"] = target_df["Month"].map(MONTH_MAP)
     target_df["Year"] = target_df["Month_No"].apply(lambda x: 2025 if x >= 4 else 2026)
-    target_df["YearMonth"] = target_df["Year"] * 100 + target_df["Month_No"]
+    target_df["YearMonth"] = target_df["Year"]*100 + target_df["Month_No"]
     target_df["MARK"] = target_df["MARK"].str.upper().str.strip()
-
 
 
     # ================= MARKETING FILTER =================
     selected_marketing = "ALL"
     if is_admin:
         selected_marketing = st.selectbox(
-            "📌 Select Marketing Person",
+            "Select Marketing Person",
             ["ALL"] + sorted(target_df["MARK"].unique())
         )
         if selected_marketing != "ALL":
             sales_df = sales_df[sales_df["MARK"] == selected_marketing]
             target_df = target_df[target_df["MARK"] == selected_marketing]
     else:
-        m = marketing.upper()
-        sales_df = sales_df[sales_df["MARK"] == m]
-        target_df = target_df[target_df["MARK"] == m]
-
+        marketing_upper = marketing.upper()
+        sales_df = sales_df[sales_df["MARK"] == marketing_upper]
+        target_df = target_df[target_df["MARK"] == marketing_upper]
 
 
     # ================= MONTHLY REPORT =================
+    if "YearMonth" not in sales_df.columns:
+        st.error("❌ YearMonth missing in MAIN_COPY sheet")
+        st.stop()
+
     monthly_sales = sales_df.groupby(
         ["MARK", "YearMonth", "Month_Text"], as_index=False
     )["Value"].sum()
 
     monthly_report = pd.merge(
         monthly_sales,
-        target_df[["MARK", "YearMonth", "Target"]],
-        on=["MARK", "YearMonth"],
+        target_df[["MARK","YearMonth","Target"]],
+        on=["MARK","YearMonth"],
         how="left"
     )
 
     monthly_report["Target"] = monthly_report["Target"].fillna(0)
     monthly_report["Achievement_%"] = (
-        monthly_report["Value"] / monthly_report["Target"] * 100
+        monthly_report["Value"]/monthly_report["Target"]*100
     ).round(1)
 
-    monthly_report = monthly_report.sort_values(["MARK", "YearMonth"])
 
-
-
-    # ================= SALES REPORT UI =================
+    # ================= SALES PERFORMANCE REPORT =================
     st.subheader("📊 Sales Performance Report")
 
     col1, col2, col3 = st.columns(3)
-    col1.metric("Total Target", f"₹ {monthly_report['Target'].sum():,.0f}")
-    col2.metric("Total Sales", f"₹ {monthly_report['Value'].sum():,.0f}")
-
     total_target = monthly_report["Target"].sum()
-    total_sale = monthly_report["Value"].sum()
-    col3.metric("Achievement %", f"{(total_sale / total_target * 100):.1f} %" if total_target else "0 %")
-    
-    
+    total_sales = monthly_report["Value"].sum()
 
-# ================= SALES PROJECTION REPORT =================
-    st.subheader("📈 Sales Projection Report (To Achieve Full Target)")
+    col1.metric("Total Target", f"₹ {total_target:,.0f}")
+    col2.metric("Total Sales", f"₹ {total_sales:,.0f}")
+    col3.metric("Achievement %", f"{(total_sales/total_target*100):.1f} %" if total_target else "0 %")
 
-# Completed months (use YearMonth, never Month_Text)
-    completed_months = monthly_report[monthly_report["sales"] > 0]["YearMonth"].nunique()
 
-# Total target
-    total_target = monthly_report["Target"].sum()
+    # ================= SALES PROJECTION =================
+    st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-# Completed sales
-    total_sales = monthly_report["sales"].sum()
+    # Completed months based on VALUE, not sales column
+    completed_months = sales_df[sales_df["Value"] > 0]["YearMonth"].nunique()
 
-# Remaining sales to reach target
-    remaining_sales = total_target - total_sales
-    if remaining_sales < 0:
-        remaining_sales = 0  # Avoid negative
+    remaining_target = max(total_target - total_sales, 0)
+    remaining_months = max(12 - completed_months, 0)
 
-# Remaining months
-    remaining_months = 12 - completed_months
-    if remaining_months < 0:
-        remaining_months = 0
+    required_monthly_sales = (remaining_target / remaining_months) if remaining_months > 0 else 0
 
-# Monthly required sales
-    if remaining_months == 0:
-        monthly_required = 0
-    else:
-        monthly_required = remaining_sales / remaining_months
-
-# Display metrics
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
-    colp2.metric("Remaining Target (₹)", f"{remaining_sales:,.0f}")
+    colp2.metric("Remaining Target", f"₹ {remaining_target:,.0f}")
     colp3.metric("Months Left", remaining_months)
-    colp4.metric("Required Monthly Sales (₹)", f"{monthly_required:,.0f}")
+    colp4.metric("Required Monthly Sales", f"₹ {required_monthly_sales:,.0f}")
 
 
-
-
+    # ================= CHARTS =================
     st.subheader("📊 Month-wise Target vs Sales")
 
-    chart_df = (
-        monthly_report.groupby("Month_Text", as_index=False)[["Target", "Value"]]
-        .sum()
-        .set_index("Month_Text")
-    )
+    chart_df = monthly_report.groupby("Month_Text", as_index=False)[["Target","Value"]].sum()
+    chart_df = chart_df.set_index("Month_Text")
 
     st.bar_chart(chart_df)
 
 
+    # ================= MONTHLY TABLE =================
     st.subheader("📋 Month-wise Sales Performance")
-    st.dataframe(
-        monthly_report.rename(columns={"Value": "Sales Value"}),
-        use_container_width=True
-    )
-
+    st.dataframe(monthly_report.rename(columns={"Value":"Sales Value"}), use_container_width=True)
 
 
     # ================= NEW CUSTOMER REPORT =================
     st.subheader("🆕 New Customer Report")
 
-    # Clean customer names
     sales_df["CUSTOMER NAME"] = sales_df["CUSTOMER NAME"].astype(str).str.upper().str.strip()
     new_customer_df["CUSTOMER NAME"] = new_customer_df["CUSTOMER NAME"].astype(str).str.upper().str.strip()
 
@@ -338,32 +304,28 @@ def dashboard():
         sales_df["CUSTOMER NAME"].isin(new_customer_df["CUSTOMER NAME"])
     ]
 
-    new_customer_count = new_customer_sales_df["CUSTOMER NAME"].nunique()
-    new_customer_sales = new_customer_sales_df["Value"].sum()
+    nc_count = new_customer_sales_df["CUSTOMER NAME"].nunique()
+    nc_sales = new_customer_sales_df["Value"].sum()
 
-    col_nc1, col_nc2 = st.columns(2)
-    col_nc1.metric("New Customers", new_customer_count)
-    col_nc2.metric("New Customer Sales", f"₹ {new_customer_sales:,.0f}")
-
+    colnc1, colnc2 = st.columns(2)
+    colnc1.metric("New Customers", nc_count)
+    colnc2.metric("New Customer Sales", f"₹ {nc_sales:,.0f}")
 
 
     # ================= BRAND WISE SALES =================
     st.subheader("🏷️ Brand Wise Sales")
 
-    make_target_df["Make"] = make_target_df["Make"].str.upper()
-    brand_rows = []
+    make_target_df["Make"] = make_target_df["Make"].astype(str).str.upper()
 
+    brand_rows = []
     months_count = sales_df["YearMonth"].nunique()
 
     for _, r in make_target_df.iterrows():
         mk = r["Make"]
         m_target = r["Target"] * months_count
 
-        mk_sales = sales_df[
-            sales_df["make"].str.contains(mk, na=False)
-        ]["Value"].sum()
-
-        pct = (mk_sales / m_target * 100) if m_target else 0
+        mk_sales = sales_df[sales_df["make"].str.contains(mk, na=False)]["Value"].sum()
+        pct = (mk_sales / m_target * 100) if m_target > 0 else 0
 
         brand_rows.append({
             "Brand": mk,
@@ -373,7 +335,6 @@ def dashboard():
         })
 
     st.dataframe(pd.DataFrame(brand_rows), use_container_width=True)
-
 
 
     # ================= PDF DOWNLOAD =================
