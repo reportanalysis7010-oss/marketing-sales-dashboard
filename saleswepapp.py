@@ -282,40 +282,44 @@ def dashboard():
 # ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-# Detect current yearmonth based on available data, NOT system date
-    max_available_ym = monthly_report["YearMonth"].max()
+# Identify the max available month in dataset
+    max_ym = monthly_report["YearMonth"].max()
 
-# Completed months = all months strictly LESS than max available month
-    completed_df = monthly_report[monthly_report["YearMonth"] < max_available_ym]
-    future_df = monthly_report[monthly_report["YearMonth"] >= max_available_ym]
+# Completed: strictly LESS than max available.YearMonth
+    completed_df = monthly_report[monthly_report["YearMonth"] < max_ym]
 
+# Future: YearMonth >= max but Target > 0 (upcoming months)
+    future_df = monthly_report[monthly_report["YearMonth"] >= max_ym]
+
+# Count months
     completed_months = completed_df["YearMonth"].nunique()
     remaining_months = future_df["YearMonth"].nunique()
 
-# Completed period numbers
+# Compute completed period numbers
     completed_target = completed_df["Target"].sum()
     completed_sales = completed_df["Value"].sum()
 
-# Sales gap: target missing for completed months
+# Sales gap
     sales_gap = max(completed_target - completed_sales, 0)
 
-# Future months target (Feb + Mar)
+# Future target for remaining months
     future_target = future_df["Target"].sum()
 
-# ⭐ FINAL CORRECT REMAINING TARGET
+# FINAL remaining target (CORRECT formula)
     projected_remaining_target = sales_gap + future_target
 
-# Monthly required sales
+# Monthly required sales for remaining months
     required_monthly_sales = (
         projected_remaining_target / remaining_months if remaining_months > 0 else 0
     )
 
-# Display metrics
+# Display
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
     colp2.metric("Remaining Target (₹)", f"{projected_remaining_target:,.0f}")
     colp3.metric("Months Left", remaining_months)
     colp4.metric("Required Monthly Sales (₹)", f"{required_monthly_sales:,.0f}")
+
 
 
 
