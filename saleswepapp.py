@@ -282,35 +282,41 @@ def dashboard():
 # ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-# Current YearMonth
-    today = datetime.today()
-    current_ym = today.year * 100 + today.month
+# Detect current yearmonth based on available data, NOT system date
+    max_available_ym = monthly_report["YearMonth"].max()
 
-# Completed and future logic
-    completed_target = monthly_report[monthly_report["YearMonth"] < current_ym]["Target"].sum()
-    completed_sales  = monthly_report[monthly_report["YearMonth"] < current_ym]["Value"].sum()
+# Completed months = all months strictly LESS than max available month
+    completed_df = monthly_report[monthly_report["YearMonth"] < max_available_ym]
+    future_df = monthly_report[monthly_report["YearMonth"] >= max_available_ym]
 
+    completed_months = completed_df["YearMonth"].nunique()
+    remaining_months = future_df["YearMonth"].nunique()
+
+# Completed period numbers
+    completed_target = completed_df["Target"].sum()
+    completed_sales = completed_df["Value"].sum()
+
+# Sales gap: target missing for completed months
     sales_gap = max(completed_target - completed_sales, 0)
 
-    future_target = monthly_report[monthly_report["YearMonth"] >= current_ym]["Target"].sum()
+# Future months target (Feb + Mar)
+    future_target = future_df["Target"].sum()
 
-# ⭐ FINAL REMAINING TARGET (GAP + FUTURE TARGET)
+# ⭐ FINAL CORRECT REMAINING TARGET
     projected_remaining_target = sales_gap + future_target
 
-# Remaining months
-    completed_months = monthly_report[monthly_report["YearMonth"] < current_ym]["YearMonth"].nunique()
-    remaining_months = 12 - completed_months
-
+# Monthly required sales
     required_monthly_sales = (
         projected_remaining_target / remaining_months if remaining_months > 0 else 0
     )
 
-# Metrics
+# Display metrics
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
     colp2.metric("Remaining Target (₹)", f"{projected_remaining_target:,.0f}")
     colp3.metric("Months Left", remaining_months)
     colp4.metric("Required Monthly Sales (₹)", f"{required_monthly_sales:,.0f}")
+
 
 
 
