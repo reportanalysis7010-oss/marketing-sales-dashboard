@@ -282,35 +282,36 @@ def dashboard():
 # ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-# Identify the max available month in dataset
-    max_ym = monthly_report["YearMonth"].max()
+# Define current YearMonth
+    today = datetime.today()
+    current_ym = today.year * 100 + today.month   # Example: 202602
 
-# Completed: strictly LESS than max available.YearMonth
-    completed_df = monthly_report[monthly_report["YearMonth"] < max_ym]
+# Completed months = strictly before the current month
+    completed_df = monthly_report[monthly_report["YearMonth"] < current_ym]
 
-# Future: YearMonth >= max but Target > 0 (upcoming months)
-    future_df = monthly_report[monthly_report["YearMonth"] >= max_ym]
+# Future months = current month and after
+    future_df = monthly_report[monthly_report["YearMonth"] >= current_ym]
 
 # Count months
     completed_months = completed_df["YearMonth"].nunique()
     remaining_months = future_df["YearMonth"].nunique()
 
-# Compute completed period numbers
+# Completed actuals
     completed_target = completed_df["Target"].sum()
     completed_sales = completed_df["Value"].sum()
 
-# Sales gap
+# Sales gap for completed period
     sales_gap = max(completed_target - completed_sales, 0)
 
-# Future target for remaining months
+# Target for remaining months (Feb + Mar)
     future_target = future_df["Target"].sum()
 
-# FINAL remaining target (CORRECT formula)
+# Total required target to hit final goal
     projected_remaining_target = sales_gap + future_target
 
-# Monthly required sales for remaining months
+# Required monthly sales
     required_monthly_sales = (
-        projected_remaining_target / remaining_months if remaining_months > 0 else 0
+        projected_remaining_target / remaining_months if remaining_months else 0
     )
 
 # Display
