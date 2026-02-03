@@ -253,50 +253,55 @@ def dashboard():
     # ================= SALES PERFORMANCE REPORT =================
     st.subheader("📊 Sales Performance Report")
 
-    col1, col2, col3 = st.columns(3)
-    total_target = monthly_report["Target"].sum()
-    total_sales = monthly_report["Value"].sum()
-
-    col1.metric("Total Target", f"₹ {total_target:,.0f}")
-    col2.metric("Total Sales", f"₹ {total_sales:,.0f}")
-    col3.metric("Achievement %", f"{(total_sales/total_target*100):.1f} %" if total_target else "0 %")
-
-
-   # ================= SALES PROJECTION REPORT =================
-    st.subheader("📈 Sales Projection (To Achieve Full Target)")
-
-# CURRENT YearMonth (system date)
+# Current YearMonth
     today = datetime.today()
     current_ym = today.year * 100 + today.month
 
-# Completed months = all months strictly before current month
-    completed_months = monthly_report[
+# Completed target (APR–JAN)
+    completed_target = monthly_report[
         monthly_report["YearMonth"] < current_ym
-    ]["YearMonth"].nunique()
+    ]["Target"].sum()
 
-# Total target
-    total_target = monthly_report["Target"].sum()
-
-# Completed sales (only for completed months)
+# Completed sales (APR–JAN)
     completed_sales = monthly_report[
         monthly_report["YearMonth"] < current_ym
     ]["Value"].sum()
 
-# Remaining sales to reach target
-    remaining_sales = max(total_target - completed_sales, 0)
+# Future target (FEB–MAR)
+    future_target = monthly_report[
+        monthly_report["YearMonth"] >= current_ym
+    ]["Target"].sum()
+
+    achievement = (completed_sales / completed_target * 100) if completed_target else 0
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Total Target (Completed Months)", f"₹ {completed_target:,.0f}")
+    col2.metric("Total Sales (Completed Months)", f"₹ {completed_sales:,.0f}")
+    col3.metric("Achievement %", f"{achievement:.1f} %")
+
+
+# ================= SALES PROJECTION REPORT =================
+    st.subheader("📈 Sales Projection (To Achieve Full Target)")
+
+# Completed months count
+    completed_months = monthly_report[
+        monthly_report["YearMonth"] < current_ym
+    ]["YearMonth"].nunique()
+
+# Sales gap for completed target
+    remaining_target_to_achieve = max(completed_target - completed_sales, 0)
 
 # Remaining months
-    remaining_months = max(12 - completed_months, 0)
+    remaining_months = 12 - completed_months
 
-# Required sales per month
+# Monthly need to reach completed months target
     required_monthly_sales = (
-        remaining_sales / remaining_months if remaining_months > 0 else 0
+        remaining_target_to_achieve / remaining_months if remaining_months > 0 else 0
     )
 
-# Show UI
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
-    colp2.metric("Remaining Target (₹)", f"{remaining_sales:,.0f}")
+    colp2.metric("Remaining Target (₹)", f"{remaining_target_to_achieve:,.0f}")
     colp3.metric("Months Left", remaining_months)
     colp4.metric("Required Monthly Sales (₹)", f"{required_monthly_sales:,.0f}")
 
