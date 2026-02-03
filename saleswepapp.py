@@ -33,7 +33,6 @@ USERS = {
     "ho": {"password": "ho@123", "marketing": "H O - Marketing"},
 }
 
-
 MONTH_MAP = {
     "APR": 4, "MAY": 5, "JUN": 6, "JUL": 7,
     "AUG": 8, "SEP": 9, "OCT": 10, "NOV": 11,
@@ -171,17 +170,14 @@ def dashboard():
     )
 
 
-    # ================= SAFE DATE PARSING =================
+    # ================= SAFE DATE PROCESSING =================
     sales_df["Date"] = pd.to_datetime(sales_df["Date"], errors="coerce")
     sales_df = sales_df.dropna(subset=["Date"])
 
     sales_df["Safe_Year"] = sales_df["Date"].dt.year
     sales_df["Safe_Month"] = sales_df["Date"].dt.month
     sales_df["Safe_YearMonth"] = sales_df["Safe_Year"] * 100 + sales_df["Safe_Month"]
-
-    # Fix Month Text if exists
-    if "Month_Text" not in sales_df.columns:
-        sales_df["Month_Text"] = sales_df["Date"].dt.strftime("%b").str.upper()
+    sales_df["Month_Text"] = sales_df["Date"].dt.strftime("%b").str.upper()
 
 
     # ================= CLEAN SALES DF =================
@@ -248,7 +244,7 @@ def dashboard():
     st.subheader("📊 Sales Performance Report")
 
     today = datetime.today()
-    current_ym = today.year * 100 + today.month  # Example: 202602
+    current_ym = today.year * 100 + today.month
 
     completed_df = monthly_report[monthly_report["Safe_YearMonth"] < current_ym]
 
@@ -264,7 +260,7 @@ def dashboard():
 
 
 
-    # ================= SALES PROJECTION — SAFE METHOD =================
+    # ================= SALES PROJECTION — FINAL CORRECT LOGIC =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
     future_df = monthly_report[monthly_report["Safe_YearMonth"] >= current_ym]
