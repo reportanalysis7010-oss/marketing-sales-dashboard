@@ -268,31 +268,43 @@ def dashboard():
     total_sale = monthly_report["Value"].sum()
     col3.metric("Achievement %", f"{(total_sale / total_target * 100):.1f} %" if total_target else "0 %")
     
+    
+
+# ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection Report (To Achieve Full Target)")
 
-# Ensure Month_Text exists
-    if "Month_Text" not in monthly_report.columns:
-        st.warning("⚠ Month_Text missing in monthly_report, creating fallback...")
-        monthly_report["Month_Text"] = monthly_report["YearMonth"].astype(str)
+# Completed months (use YearMonth, never Month_Text)
+    completed_months = monthly_report[monthly_report["sales"] > 0]["YearMonth"].nunique()
 
-# Completed months
-    completed_months = monthly_report[monthly_report["sales"] > 0]["Month_Text"].nunique()
-
+# Total target
     total_target = monthly_report["Target"].sum()
+
+# Completed sales
     total_sales = monthly_report["sales"].sum()
 
+# Remaining sales to reach target
     remaining_sales = total_target - total_sales
+    if remaining_sales < 0:
+        remaining_sales = 0  # Avoid negative
+
+# Remaining months
     remaining_months = 12 - completed_months
+    if remaining_months < 0:
+        remaining_months = 0
 
-    projected_monthly_requirement = (
-        remaining_sales / remaining_months if remaining_months > 0 else 0
-    )
+# Monthly required sales
+    if remaining_months == 0:
+        monthly_required = 0
+    else:
+        monthly_required = remaining_sales / remaining_months
 
+# Display metrics
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
-    colp2.metric("Remaining Required Sales", f"₹ {remaining_sales:,.0f}")
-    colp3.metric("Remaining Months", remaining_months)
-    colp4.metric("Required Monthly Sales", f"₹ {projected_monthly_requirement:,.0f}")
+    colp2.metric("Remaining Target (₹)", f"{remaining_sales:,.0f}")
+    colp3.metric("Months Left", remaining_months)
+    colp4.metric("Required Monthly Sales (₹)", f"{monthly_required:,.0f}")
+
 
 
 
