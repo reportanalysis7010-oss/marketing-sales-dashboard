@@ -262,22 +262,44 @@ def dashboard():
     col3.metric("Achievement %", f"{(total_sales/total_target*100):.1f} %" if total_target else "0 %")
 
 
-    # ================= SALES PROJECTION =================
+   # ================= SALES PROJECTION REPORT =================
     st.subheader("📈 Sales Projection (To Achieve Full Target)")
 
-    # Completed months based on VALUE, not sales column
-    completed_months = sales_df[sales_df["Value"] > 0]["YearMonth"].nunique()
+# CURRENT YearMonth (system date)
+    today = datetime.today()
+    current_ym = today.year * 100 + today.month
 
-    remaining_target = max(total_target - total_sales, 0)
+# Completed months = all months strictly before current month
+    completed_months = monthly_report[
+        monthly_report["YearMonth"] < current_ym
+    ]["YearMonth"].nunique()
+
+# Total target
+    total_target = monthly_report["Target"].sum()
+
+# Completed sales (only for completed months)
+    completed_sales = monthly_report[
+        monthly_report["YearMonth"] < current_ym
+    ]["Value"].sum()
+
+# Remaining sales to reach target
+    remaining_sales = max(total_target - completed_sales, 0)
+
+# Remaining months
     remaining_months = max(12 - completed_months, 0)
 
-    required_monthly_sales = (remaining_target / remaining_months) if remaining_months > 0 else 0
+# Required sales per month
+    required_monthly_sales = (
+        remaining_sales / remaining_months if remaining_months > 0 else 0
+    )
 
+# Show UI
     colp1, colp2, colp3, colp4 = st.columns(4)
     colp1.metric("Completed Months", completed_months)
-    colp2.metric("Remaining Target", f"₹ {remaining_target:,.0f}")
+    colp2.metric("Remaining Target (₹)", f"{remaining_sales:,.0f}")
     colp3.metric("Months Left", remaining_months)
-    colp4.metric("Required Monthly Sales", f"₹ {required_monthly_sales:,.0f}")
+    colp4.metric("Required Monthly Sales (₹)", f"{required_monthly_sales:,.0f}")
+
 
 
     # ================= CHARTS =================
@@ -355,3 +377,4 @@ if "user" not in st.session_state:
     login()
 else:
     dashboard()
+
